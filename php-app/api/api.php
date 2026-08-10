@@ -13,9 +13,20 @@ header('Access-Control-Allow-Methods: GET, POST');
 header('Access-Control-Allow-Headers: Content-Type');
 
 define('ROOT',        dirname(__DIR__) . DIRECTORY_SEPARATOR);
-define('DATA_DIR',    ROOT . 'property_data' . DIRECTORY_SEPARATOR);
-define('UPLOADS_DIR', ROOT . 'uploads'       . DIRECTORY_SEPARATOR);
-define('OUTPUTS_DIR', ROOT . 'outputs'       . DIRECTORY_SEPARATOR);
+
+// On Railway: use /data volume for persistence. Locally: use relative paths.
+$_is_railway = !empty(getenv('RAILWAY_ENVIRONMENT')) || !empty(getenv('RAILWAY_PROJECT_ID'));
+define('DATA_DIR',    $_is_railway ? '/data/property_data/'  : ROOT . 'property_data' . DIRECTORY_SEPARATOR);
+define('UPLOADS_DIR', $_is_railway ? '/data/uploads/'        : ROOT . 'uploads'       . DIRECTORY_SEPARATOR);
+define('OUTPUTS_DIR', $_is_railway ? '/data/outputs/'        : ROOT . 'outputs'       . DIRECTORY_SEPARATOR);
+
+// Ensure directories exist on Railway
+if ($_is_railway) {
+    foreach ([DATA_DIR, UPLOADS_DIR, OUTPUTS_DIR] as $_dir) {
+        if (!is_dir($_dir)) mkdir($_dir, 0755, true);
+    }
+}
+unset($_is_railway, $_dir);
 define('SETTINGS_FILE', DATA_DIR . 'settings.json');
 define('CATS_FILE',     DATA_DIR . 'categories.json');
 define('OUT_INDEX',     OUTPUTS_DIR . 'index.json');
