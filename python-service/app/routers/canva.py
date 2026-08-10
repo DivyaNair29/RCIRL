@@ -32,7 +32,13 @@ router     = APIRouter(prefix="/canva", tags=["canva"])
 
 CANVA_CLIENT_ID     = os.getenv("CANVA_CLIENT_ID", "OC-AZ8g8tJYeLsb")
 CANVA_CLIENT_SECRET = os.getenv("CANVA_CLIENT_SECRET", "")
-REDIRECT_URI        = "http://127.0.0.1:8001/canva/callback"
+
+_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+REDIRECT_URI = (
+    f"https://{_railway_domain}/canva/callback"
+    if _railway_domain
+    else "http://127.0.0.1:8001/canva/callback"
+)
 CANVA_AUTH_URL      = "https://www.canva.com/api/oauth/authorize"
 CANVA_TOKEN_URL     = "https://api.canva.com/rest/v1/oauth/token"
 CANVA_API_BASE      = "https://api.canva.com/rest/v1"
