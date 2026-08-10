@@ -1,0 +1,10 @@
+[phases.setup]
+nixPkgs = ["php82", "python311", "python311Packages.pip"]
+
+[phases.install]
+cmds = [
+  "pip install --no-cache-dir -r python-service/requirements.txt",
+]
+
+[start]
+cmd = "python start.py"

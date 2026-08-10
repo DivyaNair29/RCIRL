@@ -1,0 +1,6 @@
+# Block direct browser access to Excel and JSON data files
+# Data is served exclusively through api/api.php
+<FilesMatch "\.(xlsx|xls|json)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>

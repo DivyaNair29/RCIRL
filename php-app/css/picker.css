@@ -1,0 +1,126 @@
+
+/* ─── Column Picker Modal ────────────────────────────────────── */
+.col-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 24px;
+  margin-top: 16px;
+}
+.col-picker-section {
+  background: var(--grey-bg);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  border: 1.5px solid var(--grey-light);
+}
+.col-picker-section.highlight {
+  border-color: var(--purple-light);
+  background: var(--purple-xpale);
+}
+.col-picker-section h4 {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--purple-dark);
+  margin-bottom: 10px;
+}
+.col-picker-section p {
+  font-size: 11px;
+  color: var(--grey);
+  margin-bottom: 8px;
+}
+.role-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1.5px solid var(--grey-light);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  background: var(--white);
+  color: var(--black);
+  transition: var(--transition);
+}
+.role-select:focus {
+  outline: none;
+  border-color: var(--purple-light);
+  box-shadow: 0 0 0 3px var(--purple-pale);
+}
+
+/* Detail column checklist */
+.col-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.col-checklist::-webkit-scrollbar { width: 3px; }
+.col-checklist::-webkit-scrollbar-thumb { background: var(--purple-pale); border-radius: 2px; }
+
+.col-check-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: var(--transition);
+  user-select: none;
+}
+.col-check-item:hover { background: var(--purple-pale); }
+.col-check-item input[type=checkbox] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--purple);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.col-check-item label {
+  font-size: 12.5px;
+  color: var(--black);
+  cursor: pointer;
+  flex: 1;
+}
+.col-check-item.checked label { font-weight: 600; color: var(--purple-dark); }
+
+/* Drag handles for reordering detail cols */
+.col-check-item .drag-handle {
+  color: var(--grey);
+  font-size: 13px;
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+/* PDF preview tweaks */
+.pdf-detail-item-wide {
+  grid-column: 1 / -1;
+  background: #F5F0FB;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+/* Poster template preview thumbnails */
+.tmpl-thumb-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.tmpl-thumb {
+  border-radius: 8px;
+  padding: 10px 8px;
+  text-align: center;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: var(--transition);
+  font-size: 11px;
+  font-weight: 600;
+}
+.tmpl-thumb:hover { transform: translateY(-2px); }
+.tmpl-thumb.selected { border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-pale); }
+.tmpl-thumb .tmpl-swatch {
+  width: 100%;
+  height: 44px;
+  border-radius: 5px;
+  margin-bottom: 5px;
+}

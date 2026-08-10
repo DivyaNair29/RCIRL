@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RCIRL — Property Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/picker.css">
+  <link rel="icon" type="image/png" href="assets/logo.png">
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebar-overlay"
+  onclick="document.querySelector('.sidebar').classList.remove('open');document.getElementById('sidebar-overlay').classList.remove('visible')"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <img src="assets/logo.png" alt="RCIRL">
+    <div class="sidebar-logo-text">
+      <span class="brand">RCIRL</span>
+      <span class="tagline">Property Consultant</span>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-item active" data-page="property-list" onclick="UI.navigate('property-list')"><span class="nav-icon">🏘</span> Property List</div>
+    <div class="nav-item" data-page="presentation"  onclick="UI.navigate('presentation')"><span class="nav-icon">📄</span> Presentation<span class="nav-badge hidden" id="cart-badge">0</span></div>
+    <div class="nav-item" data-page="post-design"   onclick="UI.navigate('post-design')"><span class="nav-icon">🎨</span> Post Design</div>
+    <div class="nav-item" data-page="outputs"       onclick="UI.navigate('outputs')"><span class="nav-icon">📁</span> Outputs</div>
+    <div class="nav-item" data-page="settings"      onclick="UI.navigate('settings')"><span class="nav-icon">⚙️</span> Settings</div>
+  </nav>
+  <div class="sidebar-footer">RCIRL © 2025 · Property Management</div>
+</aside>
+
+<div class="main-content">
+  <header class="top-bar">
+    <button class="hamburger" onclick="document.querySelector('.sidebar').classList.toggle('open');document.getElementById('sidebar-overlay').classList.toggle('visible')">☰</button>
+    <div>
+      <div class="top-bar-title" id="top-bar-title">🏘 Property List</div>
+      <div class="top-bar-subtitle" id="top-bar-subtitle">View, add, and manage all properties</div>
+    </div>
+    <div id="top-bar-actions" style="margin-left:auto"></div>
+  </header>
+
+  <!-- PROPERTY LIST -->
+  <div class="page-section active" id="page-property-list">
+    <div class="page-content">
+      <div class="stats-row" id="pl-stats">
+        <div class="stat-card s-res"><span class="stat-icon">🏠</span><span class="stat-num">…</span><span class="stat-label">Residential</span></div>
+        <div class="stat-card s-com"><span class="stat-icon">🏢</span><span class="stat-num">…</span><span class="stat-label">Commercial</span></div>
+        <div class="stat-card s-ind"><span class="stat-icon">🏭</span><span class="stat-num">…</span><span class="stat-label">Industrial</span></div>
+        <div class="stat-card s-land"><span class="stat-icon">🌿</span><span class="stat-num">…</span><span class="stat-label">Raw Land</span></div>
+      </div>
+      <div class="cat-tabs" id="pl-cat-tabs"><div style="padding:10px;color:var(--grey)">Loading…</div></div>
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input class="search-input" id="pl-search" type="text" placeholder="Search any field across all columns…" oninput="UI.handleSearch(this.value,'property-list')">
+        </div>
+        <div id="pl-filters" style="display:contents"></div>
+        <button class="btn btn-secondary" onclick="UI.openImportModal(UI.currentCat['property-list'])">📂 Import Excel</button>
+        <button class="btn btn-secondary" onclick="RCIRL_DATA.exportExcel(UI.currentCat['property-list']);toast('Downloading Excel…','success')">📤 Export Excel</button>
+        <button class="btn btn-primary"   onclick="UI.openAddModal(UI.currentCat['property-list'])">➕ Add Property</button>
+      </div>
+      <div id="pl-table-wrap"><div class="table-loading"><span class="spinner-purple"></span> Loading properties…</div></div>
+    </div>
+  </div>
+
+  <!-- PRESENTATION -->
+  <div class="page-section" id="page-presentation">
+    <div class="page-content">
+      <div id="pres-cart"></div>
+      <div class="cat-tabs" id="pres-cat-tabs"></div>
+      <div class="toolbar">
+        <div class="search-wrap"><span class="search-icon">🔍</span>
+          <input class="search-input" id="pres-search" type="text" placeholder="Search properties…" oninput="UI.handleSearch(this.value,'presentation')">
+        </div>
+        <div id="pres-filters" style="display:contents"></div>
+      </div>
+      <div id="pres-table-wrap"></div>
+    </div>
+  </div>
+
+  <!-- POST DESIGN -->
+  <div class="page-section" id="page-post-design">
+    <div class="page-content">
+      <div class="card mb-24" style="background:linear-gradient(135deg,var(--purple),var(--purple-dark));color:#fff">
+        <div class="card-body" style="padding:18px 22px">
+          <div style="font-size:15px;font-weight:700;margin-bottom:6px">🎨 Post Designer</div>
+          <div style="font-size:13px;opacity:0.85"><strong>Quick Design</strong> — instant canvas editor, no API needed, download JPG. &nbsp;|&nbsp; <strong>🤖 AI Poster</strong> — Nano Banana generates 3 styled posters using your photo (requires GEMINI_API_KEY).</div>
+        </div>
+      </div>
+      <div class="cat-tabs" id="pd-cat-tabs"></div>
+      <div class="toolbar">
+        <div class="search-wrap"><span class="search-icon">🔍</span>
+          <input class="search-input" id="pd-search" type="text" placeholder="Search properties…" oninput="UI.handleSearch(this.value,'post-design')">
+        </div>
+        <div id="pd-filters" style="display:contents"></div>
+      </div>
+      <div id="pd-table-wrap"></div>
+    </div>
+  </div>
+
+  <!-- OUTPUTS -->
+  <div class="page-section" id="page-outputs">
+    <div class="page-content">
+      <div class="flex items-center justify-between mb-24" style="flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:20px;font-weight:700;color:var(--purple-dark)">📁 Saved Outputs</div>
+          <div style="font-size:13px;color:var(--grey)">All PDFs and JPG posters — saved permanently on server</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="UI.renderOutputs()">🔄 Refresh</button>
+      </div>
+      <div class="outputs-grid" id="outputs-grid">
+        <div class="table-loading" style="grid-column:1/-1"><span class="spinner-purple"></span> Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="page-section" id="page-settings">
+    <div class="page-content">
+      <div style="margin-bottom:24px">
+        <div style="font-size:20px;font-weight:700;color:var(--purple-dark)">⚙️ Settings</div>
+        <div style="font-size:13px;color:var(--grey)">Company info, categories & filter options — saved to server</div>
+      </div>
+      <div id="settings-content"><div class="table-loading"><span class="spinner-purple"></span> Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- Libraries first -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<!-- Our JS: data → ui → ai → ai-ui → generator (each layer depends on the previous) -->
+<script src="js/data.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/ai-ui.js"></script>
+<script src="js/generator.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await RCIRL_DATA.init();
+    UI.navigate('property-list');
+  } catch(e) {
+    document.getElementById('pl-table-wrap').innerHTML =
+      '<div class="empty-state"><span class="empty-icon">⚠️</span><h3>Could not connect to server</h3>' +
+      '<p>Upload the files to your Hostinger hosting and open via your domain URL — not as a local file.</p>' +
+      '<p style="margin-top:8px;font-size:12px;color:var(--grey)">Error: ' + e.message + '</p></div>';
+  }
+
+  setInterval(() => {
+    const badge = document.getElementById('cart-badge');
+    if (!badge || !UI.presentCart) return;
+    const n = UI.presentCart.length;
+    badge.textContent = n;
+    badge.classList.toggle('hidden', n === 0);
+  }, 800);
+});
+</script>
+</body>
+</html>
