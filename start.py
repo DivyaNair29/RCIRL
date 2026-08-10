@@ -63,6 +63,34 @@ if IS_RAILWAY:
         shutil.copy2(logo_src, logo_dst)
         log("Seeded rcirl_logo.png")
 
+    # Run xlsx → SQLite migration if database is empty or missing
+    db_path = data_dir / "property_manager.db"
+    xlsx_files = list((ROOT / "php-app" / "property_data").glob("*.xlsx"))
+    needs_migration = not db_path.exists() or db_path.stat().st_size < 8192
+
+    if needs_migration and xlsx_files:
+        log("Running xlsx → SQLite migration...")
+        # The migration script uses DATA_DIR relative to php-app — set env so it finds /data
+        migrate_env = {
+            **os.environ,
+            "RAILWAY_ENVIRONMENT": "production",   # makes api.php use /data paths
+        }
+        result = subprocess.run(
+            ["php", "migrate_xlsx_to_sqlite.php"],
+            cwd=str(ROOT / "php-app"),
+            env=migrate_env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        log(f"Migration stdout: {result.stdout.strip()}")
+        if result.returncode != 0:
+            log(f"Migration stderr: {result.stderr.strip()}")
+        else:
+            log("Migration complete — database ready")
+    elif db_path.exists():
+        log(f"Database exists ({db_path.stat().st_size} bytes) — skipping migration")
+
 log(f"Starting services (Railway={IS_RAILWAY}, PORT={PORT})")
 
 # ── Start PHP ──────────────────────────────────────────────────────────────

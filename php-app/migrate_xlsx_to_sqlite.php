@@ -26,8 +26,12 @@ if (php_sapi_name() !== 'cli') {
 }
 
 define('ROOT',        __DIR__ . DIRECTORY_SEPARATOR);
-define('DATA_DIR',    ROOT . 'property_data' . DIRECTORY_SEPARATOR);
-define('UPLOADS_DIR', ROOT . 'uploads'       . DIRECTORY_SEPARATOR); // unused here, required by db.php constants
+
+// On Railway use /data volume; locally use relative paths
+$_is_railway = !empty(getenv('RAILWAY_ENVIRONMENT')) || !empty(getenv('RAILWAY_PROJECT_ID'));
+define('DATA_DIR',    $_is_railway ? '/data/property_data/'  : ROOT . 'property_data' . DIRECTORY_SEPARATOR);
+define('UPLOADS_DIR', $_is_railway ? '/data/uploads/'        : ROOT . 'uploads'       . DIRECTORY_SEPARATOR);
+unset($_is_railway);
 
 require_once __DIR__ . '/api/lib/SimpleXLSX.php';
 require_once __DIR__ . '/api/db.php';
