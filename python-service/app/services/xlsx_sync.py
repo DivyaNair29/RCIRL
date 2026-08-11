@@ -16,7 +16,13 @@ Two directions:
 import re
 import uuid
 from pathlib import Path
-import pandas as pd
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    pd = None
+    PANDAS_AVAILABLE = False
+
 
 from ..db import get_db, table_exists, _table, _header_map
 from ..config import get_settings
