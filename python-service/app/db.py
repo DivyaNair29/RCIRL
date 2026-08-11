@@ -23,7 +23,7 @@ def _table(cat: str) -> str:
 
 @contextmanager
 def get_db():
-    settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    settings.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(settings.DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
