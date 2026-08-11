@@ -1,0 +1,102 @@
+{
+    "companyName": "RCIRL Property Consultant",
+    "phone": "+91 98410 00000",
+    "email": "info@rcirl.in",
+    "website": "www.rcirl.in",
+    "filters": {
+        "residential": {
+            "BHK": [
+                "1 BHK",
+                "2 BHK",
+                "3 BHK",
+                "4 BHK",
+                "4+ BHK"
+            ],
+            "Furnished Status": [
+                "Fully Furnished",
+                "Semi-Furnished",
+                "Unfurnished"
+            ],
+            "Type": [
+                "Apartment",
+                "Independent Villa",
+                "Row House",
+                "Penthouse",
+                "Studio"
+            ],
+            "Availability": [
+                "Ready to Move",
+                "Under Construction"
+            ],
+            "Facing": [
+                "East",
+                "West",
+                "North",
+                "South",
+                "North-East",
+                "North-West"
+            ]
+        },
+        "commercial": {
+            "Property Sub-Type": [
+                "Office Space",
+                "Retail Shop",
+                "Showroom",
+                "Warehouse",
+                "Coworking Space",
+                "Mixed Use"
+            ],
+            "Transaction Type": [
+                "Sale",
+                "Rent",
+                "Lease"
+            ],
+            "Furnished Status": [
+                "Bare Shell",
+                "Warm Shell",
+                "Plug & Play",
+                "Fully Fitted"
+            ]
+        },
+        "industrial": {
+            "Property Sub-Type": [
+                "Factory Shed",
+                "Warehouse",
+                "Cold Storage",
+                "Light Industrial",
+                "Industrial Plot"
+            ],
+            "Transaction Type": [
+                "Sale",
+                "Rent",
+                "Lease"
+            ],
+            "Crane Provision": [
+                "Yes",
+                "No"
+            ]
+        },
+        "land": {
+            "Land Type": [
+                "Residential Plot",
+                "Commercial Plot",
+                "Agricultural Land",
+                "Industrial Land",
+                "Farm Land"
+            ],
+            "DTCP \/ CMDA Approved": [
+                "DTCP Approved",
+                "CMDA Approved",
+                "Panchayat",
+                "SIPCOT"
+            ],
+            "Facing": [
+                "East",
+                "West",
+                "North",
+                "South",
+                "Corner Plot"
+            ]
+        }
+    }
+}

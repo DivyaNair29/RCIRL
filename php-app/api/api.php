@@ -340,8 +340,17 @@ function writeJson($file, $data) {
 }
 
 function baseUrl() {
-    $proto  = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    // Railway terminates SSL at the load balancer and forwards via X-Forwarded-Proto
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'
+            || ($_SERVER['HTTP_X_FORWARDED_SSL']   ?? '') === 'on';
+    $proto  = $isHttps ? 'https' : 'http';
+    $host   = $_SERVER['HTTP_X_FORWARDED_HOST'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
+    // On Railway the app is served from root, not from a subpath
+    $isRailway = !empty(getenv('RAILWAY_ENVIRONMENT')) || !empty(getenv('RAILWAY_PROJECT_ID'));
+    if ($isRailway) {
+        return $proto . '://' . $host . '/';
+    }
     $script = $_SERVER['SCRIPT_NAME'] ?? '/api/api.php';
     $base   = str_replace('api/api.php', '', $script);
     return $proto . '://' . $host . $base;

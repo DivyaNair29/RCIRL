@@ -166,6 +166,9 @@ class P(http.server.BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
         hdrs = {{k: v for k, v in self.headers.items()
                  if k.lower() not in ('host', 'content-length', 'transfer-encoding')}}
+        # Tell PHP it's behind HTTPS on Railway
+        hdrs['X-Forwarded-Proto'] = hdrs.get('X-Forwarded-Proto', 'https' if os.getenv('RAILWAY_ENVIRONMENT') else 'http')
+        hdrs['X-Forwarded-Host']  = self.headers.get('Host', 'localhost')
         try:
             req = urllib.request.Request(url, data=body or None,
                                          headers=hdrs, method=self.command)
