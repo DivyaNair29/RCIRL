@@ -91,6 +91,18 @@ if IS_RAILWAY:
     elif db_path.exists():
         log(f"Database exists ({db_path.stat().st_size} bytes) — skipping migration")
 
+# Symlink /data/uploads and /data/outputs into php-app so PHP can serve them
+if IS_RAILWAY:
+    for link_name, data_path in [("uploads", "/data/uploads"),
+                                  ("outputs", "/data/outputs")]:
+        link = ROOT / "php-app" / link_name
+        if not link.exists() and not link.is_symlink():
+            try:
+                os.symlink(data_path, str(link))
+                log(f"Symlinked php-app/{link_name} -> {data_path}")
+            except Exception as e:
+                log(f"Could not symlink {link_name}: {e}")
+
 log(f"Starting services (Railway={IS_RAILWAY}, PORT={PORT})")
 
 # ── Start PHP ──────────────────────────────────────────────────────────────
@@ -112,7 +124,8 @@ wait_port(PY_PORT)  and log("Python ready")
 # Routes /generate, /files, /canva, /chat, /properties, /xlsx → Python (PY_PORT)
 # Everything else → PHP (PHP_PORT)
 PYTHON_PREFIXES = ('/generate', '/files', '/canva', '/chat',
-                   '/properties', '/xlsx', '/api/ai')
+                   '/properties', '/xlsx', '/api/ai',
+                   '/uploads', '/outputs')
 
 proxy_code = f"""
 import http.server, urllib.request, socket
@@ -121,9 +134,33 @@ PYTHON_PREFIXES = {PYTHON_PREFIXES!r}
 PHP_PORT = {PHP_PORT}
 PY_PORT  = {PY_PORT}
 
+import os, mimetypes
+
 class P(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def handle_req(self):
+        path = self.path.split('?')[0]
+
+        # On Railway: serve /uploads and /outputs directly from /data
+        is_railway = bool(os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('RAILWAY_PROJECT_ID'))
+        if is_railway and (path.startswith('/uploads/') or path.startswith('/outputs/')):
+            file_path = '/data' + path
+            if os.path.isfile(file_path):
+                mime = mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
+                with open(file_path, 'rb') as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header('Content-Type', mime)
+                self.send_header('Content-Length', str(len(data)))
+                self.send_header('Cache-Control', 'public, max-age=86400')
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                self.send_response(404)
+                self.end_headers()
+                self.wfile.write(b'Not found')
+            return
+
         port = PY_PORT if any(self.path.startswith(p) for p in PYTHON_PREFIXES) else PHP_PORT
         url  = f'http://127.0.0.1:{{port}}{{self.path}}'
         body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
