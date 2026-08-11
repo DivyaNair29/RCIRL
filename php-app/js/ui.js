@@ -1103,7 +1103,7 @@ const UI = {
             <div class="output-meta">${(out.properties||[]).join(', ')}</div>
             <div class="output-actions">
               <button class="btn btn-xs btn-secondary" onclick="UI.viewOutput('${out.url}','${out.type}','${out.filename}')">👁 View</button>
-              <button class="btn btn-xs btn-primary" onclick="UI.downloadFile('${out.url}','${out.filename}')">⬇️ Download</button>
+              <a class="btn btn-xs btn-primary" href="${out.url}" download="${out.filename}">⬇️ Download</a>
               <button class="btn btn-xs btn-danger" onclick="UI.deleteOutput('${out.filename}')">🗑</button>
             </div>
           </div>
@@ -1111,81 +1111,7 @@ const UI = {
     }).join('');
   },
 
-  async openInCanva(imgUrl, filename) {
-    // Check if already connected to Canva
-    let connected = false;
-    try {
-      const s = await fetch('http://127.0.0.1:8001/canva/status');
-      connected = (await s.json()).connected;
-    } catch (e) { /* service not running */ }
-
-    if (!connected) {
-      // Open OAuth in a popup, wait for it to finish and post back the edit URL
-      toast('Connecting to Canva…', 'info');
-      const popup = window.open(
-        `http://127.0.0.1:8001/canva/auth?file=${encodeURIComponent(filename)}`,
-        'canva_auth', 'width=600,height=700,left=200,top=100'
-      );
-
-      // Listen for the callback page to post back the edit URL
-      const handler = (e) => {
-        if (e.data?.type === 'CANVA_READY') {
-          window.removeEventListener('message', handler);
-          window.open(e.data.url, '_blank');
-        }
-      };
-      window.addEventListener('message', handler);
-
-      // Fallback: if popup closed without posting a message, try opening directly
-      const poll = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(poll);
-          window.removeEventListener('message', handler);
-        }
-      }, 500);
-      return;
-    }
-
-    // Already connected — upload and open directly
-    toast('Uploading to Canva…', 'info');
-    try {
-      const resp = await fetch('http://127.0.0.1:8001/canva/open', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename }),
-      });
-      const data = await resp.json();
-      if (data.edit_url) {
-        window.open(data.edit_url, '_blank');
-        // Show editing tip after a short delay
-        setTimeout(() => toast(
-          '✏️ In Canva: click the poster image — it is now moveable and resizable. Use the Text tool to add or edit text layers.',
-          'info'
-        ), 1500);
-      } else {
-        toast('Canva error: ' + (data.detail || JSON.stringify(data)), 'error');
-      }
-    } catch (e) {
-      toast('Could not reach AI service — is run_local.py running?', 'error');
-    }
-  },
-
-    async downloadFile(url, filename) {
-    try {
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const blob = await resp.blob();
-      const a    = document.createElement('a');
-      a.href     = URL.createObjectURL(blob);
-      a.download = filename;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    } catch (e) {
-      toast('Download failed: ' + e.message, 'error');
-    }
-  },
-
-    viewOutput(url, type, filename) {
+  viewOutput(url, type, filename) {
     const id = 'view-lightbox';
     document.getElementById(id)?.remove();
 
@@ -1200,7 +1126,7 @@ const UI = {
           <div class="modal-header">
             <div class="modal-title">${isPdf ? '📄' : '🖼'} ${filename}</div>
             <div style="display:flex;gap:8px;align-items:center">
-              <button class="btn btn-sm btn-primary" onclick="UI.downloadFile('${url}','${filename}')">⬇️ Download</button>
+              <a class="btn btn-sm btn-primary" href="${url}" download="${filename}">⬇️ Download</a>
               <button class="modal-close" onclick="document.getElementById('${id}').remove()">×</button>
             </div>
           </div>
@@ -1395,15 +1321,6 @@ const PAGE_META = {
 Object.assign(UI, {
 
   /* Style definitions mirroring nano_banana.py STYLES — labels + swatch colours */
-  _AI_STYLES: [
-    { id: 'luxury',    label: 'Luxury',    swatch: 'linear-gradient(135deg,#1a0a00,#8B6914)', desc: 'Black & gold, premium' },
-    { id: 'minimal',   label: 'Minimal',   swatch: 'linear-gradient(135deg,#f5f5f5,#d0d0d0)', desc: 'White, clean, airy'   },
-    { id: 'modern',    label: 'Modern',    swatch: 'linear-gradient(135deg,#5B2D8E,#0D1B3E)', desc: 'Bold purple, sleek'   },
-    { id: 'corporate', label: 'Corporate', swatch: 'linear-gradient(135deg,#0D3B6E,#1a5fa8)', desc: 'Navy, professional'    },
-    { id: 'tropical',  label: 'Warm Living',swatch: 'linear-gradient(135deg,#D4622A,#F4A460)', desc: 'Coral, lifestyle'    },
-    { id: 'gradient',  label: 'Gradient',  swatch: 'linear-gradient(135deg,#3D0B8C,#C9A84C)', desc: 'Purple-gold, bold'    },
-  ],
-
   async openAIPosterModal(cat, rowId) {
     const running = await RCIRL_AI.isRunning();
     document.getElementById('ai-poster-modal')?.remove();
@@ -1415,49 +1332,60 @@ Object.assign(UI, {
       row  = data.rows.find(r => r._id === rowId) || {};
       cols = data.columns.filter(c => !c.startsWith('_'));
       photos = (await RCIRL_DATA.getPhotos(cat, rowId)) || [];
-    } catch (e) { /* degrade silently */ }
+    } catch (e) {}
 
-    // ── Photo thumbnails (first photo selected by default) ──────────────
+    // ── Photo thumbnails ─────────────────────────────────────────────────
     const photoHtml = photos.length
       ? photos.map((p, i) =>
-          `<div onclick="UI._aiTogglePhoto('${p.url}',this)" data-url="${p.url}" id="ai-photo-picker"
+          `<div onclick="UI._aiTogglePhoto('${p.url}',this)" data-url="${p.url}"
                style="cursor:pointer;border-radius:6px;overflow:hidden;width:72px;height:54px;
                       position:relative;border:3px solid ${i===0?'var(--purple)':'var(--grey-light)'}">
             <img src="${p.url}" style="width:100%;height:100%;object-fit:cover" loading="lazy">
             <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);
                         color:#fff;font-size:9px;padding:2px 4px;text-align:center">Photo ${i+1}</div>
-            <div class="ai-photo-num" style="display:${i===0?'flex':'none'};position:absolute;top:3px;right:3px;
-                        background:var(--purple);color:#fff;border-radius:50%;width:16px;height:16px;
-                        font-size:9px;font-weight:700;align-items:center;justify-content:center">
-              ${i===0?1:''}
-            </div>
           </div>`).join('')
       : '<p style="font-size:12px;color:var(--grey)">No photos uploaded yet.</p>';
 
-    // ── All column checkboxes ────────────────────────────────────────────
+    // ── Size selector ────────────────────────────────────────────────────
+    const sizes = [
+      { id:'1024x1536', label:'Portrait',  sub:'1024×1536', icon:'📱', note:'Instagram / Print' },
+      { id:'1024x1024', label:'Square',    sub:'1024×1024', icon:'⬛', note:'Facebook / Feed'  },
+      { id:'1536x1024', label:'Landscape', sub:'1536×1024', icon:'🖥️',  note:'LinkedIn / Banner' },
+    ];
+    const sizeHtml = sizes.map((s,i) =>
+      `<label class="ai-size-opt" style="cursor:pointer;display:flex;flex-direction:column;
+              align-items:center;gap:3px;padding:8px 10px;border-radius:8px;transition:.15s;
+              border:2px solid ${i===0?'var(--purple)':'var(--grey-light)'}"
+             onclick="document.querySelectorAll('.ai-size-opt').forEach(l=>l.style.borderColor='var(--grey-light)');
+                      this.style.borderColor='var(--purple)'">
+        <input type="radio" name="ai-size" value="${s.id}" ${i===0?'checked':''} style="display:none">
+        <span style="font-size:16px">${s.icon}</span>
+        <span style="font-size:11px;font-weight:700;color:var(--purple-dark)">${s.label}</span>
+        <span style="font-size:9px;color:var(--grey)">${s.sub}</span>
+        <span style="font-size:9px;color:var(--grey)">${s.note}</span>
+      </label>`
+    ).join('');
+
+    // ── Column checkboxes ────────────────────────────────────────────────
     const colsHtml = cols.length
-      ? cols.map(c => {
-          const val = row[c] ? ` <span style="color:var(--grey);font-size:10px">${String(row[c]).slice(0,28)}</span>` : '';
-          return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;
-                               color:var(--grey-dark);padding:3px 0;cursor:pointer">
+      ? cols.map(c =>
+          `<label style="display:flex;align-items:center;gap:6px;font-size:12px;
+                         color:var(--grey-dark);padding:3px 0;cursor:pointer">
             <input type="checkbox" name="ai-col" value="${c}" checked
                    style="accent-color:var(--purple);cursor:pointer">
-            <span style="font-weight:600">${c}</span>${val}
-          </label>`;
-        }).join('')
+            <span style="font-weight:600">${c}</span>
+          </label>`).join('')
       : '<span style="font-size:12px;color:var(--grey)">No columns found.</span>';
 
-    // ── Optional style hint ──────────────────────────────────────────────
     const banner = running ? '' :
       `<div style="background:#FFF3CD;border:1px solid #FFD700;border-radius:8px;
-                   padding:10px 14px;margin-bottom:12px;font-size:13px;color:#856404">
-         ⚠️ AI service not running. Start via <strong>run_local.py</strong> first.
+                   padding:10px 14px;font-size:13px;color:#856404">
+         ⚠️ AI service not running — start via <strong>run_local.py</strong> first.
        </div>`;
 
     document.body.insertAdjacentHTML('beforeend', `
-      <div class="modal-overlay" id="ai-poster-modal"
-           onclick="">
-        <div class="modal" style="max-width:780px;width:95vw">
+      <div class="modal-overlay" id="ai-poster-modal">
+        <div class="modal" style="max-width:800px;width:95vw">
           <div class="modal-header">
             <div class="modal-title">🤖 AI Poster Generator</div>
             <button class="modal-close" onclick="document.getElementById('ai-poster-modal').remove()">×</button>
@@ -1465,92 +1393,88 @@ Object.assign(UI, {
           <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
             ${banner ? `<div style="grid-column:1/-1">${banner}</div>` : ''}
 
-            <!-- LEFT: columns -->
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--purple-dark);margin-bottom:6px">
-                🏷️ Property fields to include
-                <span style="font-weight:400;color:var(--grey);margin-left:6px">
-                  <a href="#" onclick="document.querySelectorAll('input[name=ai-col]').forEach(c=>c.checked=true);return false"
-                     style="color:var(--purple);font-size:10px">All</a>
-                  &nbsp;·&nbsp;
-                  <a href="#" onclick="document.querySelectorAll('input[name=ai-col]').forEach(c=>c.checked=false);return false"
-                     style="color:var(--purple);font-size:10px">None</a>
-                </span>
+            <!-- LEFT: columns + style hint -->
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div>
+                <div style="font-size:12px;font-weight:700;color:var(--purple-dark);margin-bottom:6px">
+                  🏷️ Fields to include
+                  <span style="font-weight:400;margin-left:6px">
+                    <a href="#" onclick="document.querySelectorAll('input[name=ai-col]').forEach(c=>c.checked=true);return false"
+                       style="color:var(--purple);font-size:10px">All</a>
+                    &nbsp;·&nbsp;
+                    <a href="#" onclick="document.querySelectorAll('input[name=ai-col]').forEach(c=>c.checked=false);return false"
+                       style="color:var(--purple);font-size:10px">None</a>
+                  </span>
+                </div>
+                <div style="max-height:180px;overflow-y:auto;border:1px solid var(--grey-light);
+                            border-radius:8px;padding:8px 12px;background:#fafafa;
+                            display:grid;grid-template-columns:1fr 1fr;gap:0 12px">
+                  ${colsHtml}
+                </div>
               </div>
-              <div style="max-height:240px;overflow-y:auto;border:1px solid var(--grey-light);
-                          border-radius:8px;padding:10px 12px;background:#fafafa">
-                ${colsHtml}
-              </div>
-
-              <div style="margin-top:14px">
+              <div>
                 <div style="font-size:12px;font-weight:700;color:var(--purple-dark);margin-bottom:6px">
                   ✍️ Style hint
-                  <span style="font-weight:400;color:var(--grey)"> (optional — AI decides freely if blank)</span>
+                  <span style="font-weight:400;color:var(--grey)"> (optional)</span>
                 </div>
                 <textarea id="ai-style-hint" rows="3"
-                  placeholder="e.g. luxury dark theme with gold accents&#10;or: bright modern with lots of white space&#10;Leave blank — AI chooses the best style for this property"
+                  placeholder="e.g. dark luxury with gold accents&#10;or: bright minimal white background&#10;Leave blank — AI picks the best style for each option"
                   style="width:100%;font-size:12px;padding:8px;border-radius:8px;
                          border:1px solid var(--grey-light);resize:vertical;
-                         color:var(--grey-dark);line-height:1.5;box-sizing:border-box"></textarea>
+                         line-height:1.5;box-sizing:border-box"></textarea>
               </div>
             </div>
 
-            <!-- RIGHT: photos + size + info -->
+            <!-- RIGHT: photo + size -->
             <div style="display:flex;flex-direction:column;gap:14px">
               <div>
                 <div style="font-size:12px;font-weight:700;color:var(--purple-dark);margin-bottom:8px">
-                  📷 Photos
-                  <span style="font-weight:400;color:var(--grey)">(select up to 3 — all will be used)</span>
+                  📷 Hero photo <span style="font-weight:400;color:var(--grey)">(click to select)</span>
                 </div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px">${photoHtml}</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px" id="ai-photo-picker">${photoHtml}</div>
               </div>
               <div>
-                <div style="font-size:12px;font-weight:700;color:var(--purple-dark);margin-bottom:8px">📐 Poster size</div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap">
-                  <label class="ai-size-opt" style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;border-radius:8px;border:2px solid var(--purple);transition:.15s"
-                         onclick="document.querySelectorAll('.ai-size-opt').forEach(l=>l.style.borderColor='var(--grey-light)');this.style.borderColor='var(--purple)'">
-                    <input type="radio" name="ai-size" value="1024x1536" checked style="display:none">
-                    <span style="font-size:16px">📱</span>
-                    <span style="font-size:11px;font-weight:700;color:var(--purple-dark)">Portrait</span>
-                    <span style="font-size:9px;color:var(--grey)">1024×1536</span>
-                    <span style="font-size:9px;color:var(--grey)">Instagram / Print</span>
+                <div style="font-size:12px;font-weight:700;color:var(--purple-dark);margin-bottom:8px">
+                  📐 Output size
+                </div>
+                <div style="display:flex;gap:8px">${sizeHtml}</div>
+              </div>
+              <div>
+                <div style="font-size:12px;font-weight:700;color:var(--purple-dark);margin-bottom:8px">
+                  🔢 How many posters?
+                </div>
+                <div style="display:flex;gap:8px">
+                  <label class="ai-count-opt" style="cursor:pointer;display:flex;flex-direction:column;
+                         align-items:center;gap:3px;padding:8px 14px;border-radius:8px;transition:.15s;
+                         border:2px solid var(--purple)"
+                         onclick="document.querySelectorAll('.ai-count-opt').forEach(l=>l.style.borderColor='var(--grey-light)');this.style.borderColor='var(--purple)'">
+                    <input type="radio" name="ai-count" value="1" checked style="display:none">
+                    <span style="font-size:18px">1️⃣</span>
+                    <span style="font-size:11px;font-weight:700;color:var(--purple-dark)">1 Poster</span>
+                    <span style="font-size:9px;color:var(--grey)">Fast · ~10s</span>
                   </label>
-                  <label class="ai-size-opt" style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;border-radius:8px;border:2px solid var(--grey-light);transition:.15s"
-                         onclick="document.querySelectorAll('.ai-size-opt').forEach(l=>l.style.borderColor='var(--grey-light)');this.style.borderColor='var(--purple)'">
-                    <input type="radio" name="ai-size" value="1024x1024" style="display:none">
-                    <span style="font-size:16px">⬛</span>
-                    <span style="font-size:11px;font-weight:700;color:var(--purple-dark)">Square</span>
-                    <span style="font-size:9px;color:var(--grey)">1024×1024</span>
-                    <span style="font-size:9px;color:var(--grey)">Facebook / Feed</span>
-                  </label>
-                  <label class="ai-size-opt" style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 12px;border-radius:8px;border:2px solid var(--grey-light);transition:.15s"
-                         onclick="document.querySelectorAll('.ai-size-opt').forEach(l=>l.style.borderColor='var(--grey-light)');this.style.borderColor='var(--purple)'">
-                    <input type="radio" name="ai-size" value="1536x1024" style="display:none">
-                    <span style="font-size:16px">🖥️</span>
-                    <span style="font-size:11px;font-weight:700;color:var(--purple-dark)">Landscape</span>
-                    <span style="font-size:9px;color:var(--grey)">1536×1024</span>
-                    <span style="font-size:9px;color:var(--grey)">LinkedIn / Banner</span>
+                  <label class="ai-count-opt" style="cursor:pointer;display:flex;flex-direction:column;
+                         align-items:center;gap:3px;padding:8px 14px;border-radius:8px;transition:.15s;
+                         border:2px solid var(--grey-light)"
+                         onclick="document.querySelectorAll('.ai-count-opt').forEach(l=>l.style.borderColor='var(--grey-light)');this.style.borderColor='var(--purple)'">
+                    <input type="radio" name="ai-count" value="3" style="display:none">
+                    <span style="font-size:18px">3️⃣</span>
+                    <span style="font-size:11px;font-weight:700;color:var(--purple-dark)">3 Options</span>
+                    <span style="font-size:9px;color:var(--grey)">~30s, compare</span>
                   </label>
                 </div>
               </div>
-              <div style="background:var(--purple-xpale);border-radius:8px;padding:12px;
-                          font-size:12px;color:var(--grey-dark);line-height:1.6">
-                <strong>How it works:</strong><br>
-                3 unique poster variations are generated in parallel.<br>
-                Pick the ones you like and download or open in Canva.<br><br>
-                ${running
-                  ? '✅ Service running · typically <strong>20–45 seconds</strong>'
-                  : '❌ Start run_local.py first'}<br><br>
-                Needs <code>OPENAI_API_KEY</code> in <code>python-service/.env</code>
+              <div style="background:var(--purple-xpale);border-radius:8px;padding:10px 12px;
+                          font-size:12px;color:var(--grey-dark);line-height:1.5">
+                ${running ? '✅ AI ready' : '❌ Start run_local.py first.'}
               </div>
             </div>
           </div>
           <div class="modal-footer">
             <button class="btn btn-ghost" onclick="document.getElementById('ai-poster-modal').remove()">Cancel</button>
-            <button class="btn btn-primary"
-                    onclick="UI._runAIPosterGeneration('${cat}','${rowId}')"
+            <button class="btn btn-primary" onclick="UI._runAIPosterGeneration('${cat}','${rowId}')"
                     ${running ? '' : 'disabled'}>
-              ✨ Generate Poster
+              ✨ Generate 3 Poster Options
             </button>
           </div>
         </div>
@@ -1564,26 +1488,13 @@ Object.assign(UI, {
     if (!this._aiSelectedPhotos) this._aiSelectedPhotos = [];
     const idx = this._aiSelectedPhotos.indexOf(url);
     if (idx === -1) {
-      if (this._aiSelectedPhotos.length >= 3) { toast('Select up to 3 photos', 'warning'); return; }
-      this._aiSelectedPhotos.push(url);
+      // Allow only 1 hero photo for AI (it uses photos[0])
+      this._aiSelectedPhotos = [url];
+      document.querySelectorAll('#ai-photo-picker > div').forEach(d => d.style.borderColor = 'var(--grey-light)');
       el.style.borderColor = 'var(--purple)';
-      el.querySelector('.ai-photo-num').textContent = this._aiSelectedPhotos.length;
-      el.querySelector('.ai-photo-num').style.display = 'flex';
     } else {
-      this._aiSelectedPhotos.splice(idx, 1);
+      this._aiSelectedPhotos = [];
       el.style.borderColor = 'var(--grey-light)';
-      el.querySelector('.ai-photo-num').style.display = 'none';
-      // Renumber remaining selected photos
-      document.querySelectorAll('#ai-photo-picker > div').forEach(d => {
-        const dUrl = d.dataset.url;
-        const dIdx = this._aiSelectedPhotos.indexOf(dUrl);
-        const numEl = d.querySelector('.ai-photo-num');
-        if (numEl) {
-          numEl.textContent = dIdx + 1;
-          numEl.style.display = dIdx >= 0 ? 'flex' : 'none';
-          d.style.borderColor = dIdx >= 0 ? 'var(--purple)' : 'var(--grey-light)';
-        }
-      });
     }
   },
 
@@ -1597,23 +1508,34 @@ Object.assign(UI, {
   },
 
   async _runAIPosterGeneration(cat, rowId) {
-    const selCols   = [...document.querySelectorAll('input[name="ai-col"]:checked')].map(cb => cb.value);
+    // Read all modal options
     const styleHint = (document.getElementById('ai-style-hint')?.value || '').trim();
-    const heroPhotos = this._aiSelectedPhotos?.length ? [...this._aiSelectedPhotos] : null;
     const selSize   = document.querySelector('input[name="ai-size"]:checked')?.value || '1024x1536';
+    const selCols   = [...document.querySelectorAll('input[name="ai-col"]:checked')].map(cb => cb.value);
+    const selPhotos = (this._aiSelectedPhotos?.length ? this._aiSelectedPhotos : null);
 
     document.getElementById('ai-poster-modal').remove();
+    const countVal = document.querySelector('input[name="ai-count"]:checked')?.value || '1';
     this._showAILoading(
-      'Generating 3 poster options…',
-      'All 3 run in parallel — AI picks a unique style for each. Usually 20–45 seconds.'
+      countVal === '3' ? 'Generating 3 poster options in parallel…' : 'Generating poster…',
+      countVal === '3' ? 'Each option has a different visual style. Usually 20–40 seconds.' : 'Usually 8–12 seconds.'
     );
 
-    const result = await RCIRL_AI.generatePosterTriple(cat, rowId, selCols, heroPhotos, styleHint, selSize);
+    const count  = document.querySelector('input[name="ai-count"]:checked')?.value || '1';
+    const styles = count === '3' ? ['v1','v2','v3'] : ['v1'];
+
+    const result = await RCIRL_AI.generatePosterBatch(
+      cat, rowId, styles, selSize, selCols, selPhotos, styleHint
+    );
     this._hideAILoading();
 
-    if (!result || !result.ok) {
-      const err = result?.errors?.map(e => `Option ${e.variation}: ${e.error}`).join('\n') || 'Generation failed.';
-      this._showAIError('Poster Generation Failed', err);
+    if (!result || result.ok === false) {
+      this._showAIError('AI Poster Error', result?.error || 'Generation failed. Check the Python service terminal for details.');
+      return;
+    }
+    if (!result.posters?.length) {
+      const errDetails = result.errors?.map(e => `${e.style}: ${e.error}`).join('\n') || 'Unknown error';
+      this._showAIError('No Posters Generated', errDetails);
       return;
     }
 
@@ -1623,134 +1545,55 @@ Object.assign(UI, {
   _showPosterComparison(posters, fallbackCopy) {
     document.getElementById('ai-compare-modal')?.remove();
 
-    const cards = posters.map((p, idx) => {
+    const cards = posters.map(p => {
       const imgUrl = AI_API + p.url;
       const fname  = p.url.split('/').pop();
+      // Canva design link — opens Canva with the image as a background/element to edit
+      const canvaUrl = `https://www.canva.com/design/create?background_image_url=${encodeURIComponent(imgUrl)}`;
       return `
-        <div style="display:flex;flex-direction:column;align-items:center;gap:10px;
-                    padding:14px;border-radius:12px;border:3px solid transparent;
-                    transition:.2s;background:#1a1a2e" id="pc-card-${idx}">
-          <!-- Checkbox -->
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;
-                        font-size:13px;font-weight:700;color:var(--purple-pale)">
-            <input type="checkbox" id="pc-chk-${idx}" data-url="${imgUrl}" data-fname="${fname}"
-                   checked onchange="UI._pcToggleCard(${idx},this)"
-                   style="accent-color:var(--purple);width:16px;height:16px;cursor:pointer">
-            ${p.label}
-          </label>
-
-          <!-- Poster image -->
-          <div style="cursor:pointer;border-radius:8px;overflow:hidden;
-                      box-shadow:0 4px 20px rgba(91,45,142,0.4)"
-               onclick="UI.viewOutput('${imgUrl}','jpg','${fname}')">
-            <img src="${imgUrl}" alt="${p.label}"
-                 style="width:220px;height:auto;max-height:320px;
-                        object-fit:contain;display:block" loading="lazy">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+          <div style="font-size:13px;font-weight:700;color:var(--purple)">${p.label}</div>
+          <div style="background:#2a2a2a;padding:8px;border-radius:10px;cursor:pointer" onclick="UI.viewOutput('${imgUrl}','jpg','${fname}')">
+            <img src="${imgUrl}" alt="${p.label}" style="width:220px;height:auto;object-fit:contain;border-radius:6px;display:block" loading="lazy">
           </div>
-
-          <!-- Per-poster actions -->
-          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">
-            <button class="btn btn-xs btn-secondary"
-                    onclick="UI.viewOutput('${imgUrl}','jpg','${fname}')">👁 View</button>
-            <button class="btn btn-xs btn-primary"
-                    onclick="UI.downloadFile('${imgUrl}','${fname}')">⬇️ Download</button>
-            <button class="btn btn-xs"
-                    onclick="UI.openInCanva('${imgUrl}','${fname}')"
-                    style="background:#7B2FBE;color:#fff;border:none;font-size:11px;
-                           padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:600">
-              🎨 Canva
-            </button>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:center">
+            <button class="btn btn-xs btn-secondary" onclick="UI.viewOutput('${imgUrl}','jpg','${fname}')">👁 View</button>
+            <a class="btn btn-xs btn-primary" href="${imgUrl}" download="${fname}">⬇️ Download</a>
+            <a class="btn btn-xs" style="background:#7B2FBE;color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;text-decoration:none;display:inline-flex;align-items:center;gap:4px" href="${canvaUrl}" target="_blank" title="Open in Canva to edit text, colours, layout">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+              Edit in Canva
+            </a>
           </div>
         </div>`;
     }).join('');
 
     const note = fallbackCopy
-      ? '<p style="font-size:11px;color:var(--grey);margin-top:8px">ℹ️ Copy generated from property data (add OPENAI_API_KEY for AI-written copy).</p>'
+      ? `<p style="font-size:11px;color:var(--grey);margin-top:12px">ℹ️ Copy was generated from property data (no OPENAI_API_KEY set). Add your key for AI-written marketing copy.</p>`
       : '';
 
     document.body.insertAdjacentHTML('beforeend', `
-      <div class="modal-overlay" id="ai-compare-modal"
-           onclick="">
-        <div class="modal" style="max-width:900px;width:95vw">
+      <div class="modal-overlay" id="ai-compare-modal" onclick="if(event.target.id==='ai-compare-modal')document.getElementById('ai-compare-modal').remove()">
+        <div class="modal" style="max-width:${posters.length > 1 ? '900px' : '420px'};width:95vw">
           <div class="modal-header">
-            <div class="modal-title">🎨 AI Generated Posters — Pick your favourite(s)</div>
-            <button class="modal-close"
-                    onclick="document.getElementById('ai-compare-modal').remove()">×</button>
+            <div class="modal-title">🎨 AI Generated Posters — Choose Your Favourite</div>
+            <button class="modal-close" onclick="document.getElementById('ai-compare-modal').remove()">×</button>
           </div>
           <div class="modal-body">
-            <!-- Poster grid -->
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);
-                        gap:16px;justify-items:center;margin-bottom:20px">
+            <div style="display:grid;grid-template-columns:repeat(${posters.length},1fr);gap:20px;justify-items:center">
               ${cards}
             </div>
-
-            <!-- Bulk actions bar -->
-            <div style="display:flex;align-items:center;justify-content:space-between;
-                        flex-wrap:wrap;gap:10px;padding:12px 16px;
-                        background:var(--purple-xpale);border-radius:10px">
-              <div style="display:flex;align-items:center;gap:12px">
-                <label style="display:flex;align-items:center;gap:6px;
-                              font-size:12px;color:var(--grey-dark);cursor:pointer">
-                  <input type="checkbox" id="pc-chk-all" checked
-                         onchange="UI._pcToggleAll(this)"
-                         style="accent-color:var(--purple);width:15px;height:15px">
-                  Select all
-                </label>
-                <span style="font-size:12px;color:var(--grey)" id="pc-sel-count">
-                  ${posters.length} of ${posters.length} selected
-                </span>
-              </div>
-              <div style="display:flex;gap:8px">
-                <button class="btn btn-primary" onclick="UI._pcDownloadSelected()">
-                  ⬇️ Download Selected
-                </button>
-                <button class="btn btn-ghost"
-                        onclick="document.getElementById('ai-compare-modal').remove()">
-                  Close
-                </button>
-              </div>
+            <div style="margin-top:14px;padding:10px 14px;background:#F0EAF8;border-radius:8px;font-size:12px;color:var(--grey-dark)">
+              💡 <strong>Edit in Canva</strong> opens the poster as a background image in Canva where you can customise text, add your logo, change colours and download in any format — no API needed.
             </div>
+            <p style="font-size:12px;color:var(--grey);margin-top:8px">Click any poster to view full size. Downloaded posters are also saved to Outputs.</p>
             ${note}
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="document.getElementById('ai-compare-modal').remove()">Close</button>
           </div>
         </div>
       </div>`);
-
-    // Highlight selected cards
-    posters.forEach((_, i) => UI._pcToggleCard(i, document.getElementById('pc-chk-' + i)));
   },
-
-  _pcToggleCard(idx, chk) {
-    const card = document.getElementById('pc-card-' + idx);
-    if (!card) return;
-    card.style.borderColor = chk.checked ? 'var(--purple)' : 'transparent';
-    card.style.background  = chk.checked ? '#1a1a2e' : '#111';
-    // Update "select all" state
-    const all    = [...document.querySelectorAll('[id^="pc-chk-"]:not(#pc-chk-all)')];
-    const checked = all.filter(c => c.checked).length;
-    const allChk = document.getElementById('pc-chk-all');
-    if (allChk) {
-      allChk.checked       = checked === all.length;
-      allChk.indeterminate = checked > 0 && checked < all.length;
-    }
-    const cnt = document.getElementById('pc-sel-count');
-    if (cnt) cnt.textContent = `${checked} of ${all.length} selected`;
-  },
-
-  _pcToggleAll(allChk) {
-    document.querySelectorAll('[id^="pc-chk-"]:not(#pc-chk-all)')
-      .forEach((c, i) => { c.checked = allChk.checked; UI._pcToggleCard(i, c); });
-  },
-
-  async _pcDownloadSelected() {
-    const checked = [...document.querySelectorAll('[id^="pc-chk-"]:not(#pc-chk-all)')].filter(c => c.checked);
-    if (!checked.length) { toast('Select at least one poster', 'error'); return; }
-    for (const chk of checked) {
-      await UI.downloadFile(chk.dataset.url, chk.dataset.fname);
-      await new Promise(r => setTimeout(r, 400)); // small delay between downloads
-    }
-    toast(`Downloaded ${checked.length} poster${checked.length > 1 ? 's' : ''}`, 'success');
-  },
-
 
   /* ══════════════════════════════════════════════════════════
      AI PRESENTATION — AI Brochure per property in cart
@@ -1763,104 +1606,11 @@ Object.assign(UI, {
       toast('AI service is not running. Start it via run_local.py first.', 'error'); return;
     }
 
-    // Load columns from the first cart item's category
-    const firstItem = this.presentCart[0];
-    let columns = [];
-    try {
-      const data = await RCIRL_DATA.getProperties(firstItem.cat);
-      columns = (data.columns || []).filter(c => !c.startsWith('_'));
-    } catch (e) { /* fallback: no column picker */ }
-
-    // Show config modal before generating
-    await this._showBrochureConfigModal(columns);
-  },
-
-  async _showBrochureConfigModal(columns) {
-    document.getElementById('ai-brochure-config-modal')?.remove();
-
-    const colsHtml = columns.length
-      ? columns.map(c =>
-          `<label style="display:flex;align-items:center;gap:7px;font-size:12px;
-                         color:var(--grey-dark);padding:3px 0;cursor:pointer">
-            <input type="checkbox" name="brochure-col" value="${c}" checked
-                   style="accent-color:var(--purple);cursor:pointer">
-            <span style="font-weight:600">${c}</span>
-          </label>`
-        ).join('')
-      : '<span style="font-size:12px;color:var(--grey)">No columns found.</span>';
+    this._showAILoading(`Generating ${this.presentCart.length} AI brochure${this.presentCart.length > 1 ? 's' : ''}…`, 'Building PDF for each property.');
 
     const settings = RCIRL_DATA.getSettings();
     const company  = settings.companyName || 'RCIRL Property Consultant';
-
-    document.body.insertAdjacentHTML('beforeend', `
-      <div class="modal-overlay" id="ai-brochure-config-modal">
-        <div class="modal" style="max-width:520px;width:95vw">
-          <div class="modal-header">
-            <div class="modal-title">📄 Configure AI Brochure</div>
-            <button class="modal-close" onclick="document.getElementById('ai-brochure-config-modal').remove()">×</button>
-          </div>
-          <div class="modal-body" style="display:flex;flex-direction:column;gap:16px">
-
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--purple-dark);margin-bottom:6px">
-                🏷️ Columns to include in brochure
-                <span style="font-weight:400;color:var(--grey);margin-left:6px">
-                  <a href="#" onclick="document.querySelectorAll('input[name=brochure-col]').forEach(c=>c.checked=true);return false"
-                     style="color:var(--purple);font-size:10px">All</a>
-                  &nbsp;·&nbsp;
-                  <a href="#" onclick="document.querySelectorAll('input[name=brochure-col]').forEach(c=>c.checked=false);return false"
-                     style="color:var(--purple);font-size:10px">None</a>
-                </span>
-              </div>
-              <div style="max-height:220px;overflow-y:auto;border:1px solid var(--grey-light);
-                          border-radius:8px;padding:10px 14px;background:#fafafa;
-                          display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
-                ${colsHtml}
-              </div>
-            </div>
-
-            <div>
-              <div style="font-size:12px;font-weight:700;color:var(--purple-dark);margin-bottom:6px">🏢 Company name</div>
-              <input id="brochure-company" type="text" value="${company}"
-                     style="width:100%;font-size:13px;padding:8px 10px;border-radius:8px;
-                            border:1px solid var(--grey-light);box-sizing:border-box">
-            </div>
-
-            <div style="background:var(--purple-xpale);border-radius:8px;padding:10px 14px;
-                        font-size:12px;color:var(--grey-dark)">
-              Generating brochure for <strong>${this.presentCart.length}</strong>
-              propert${this.presentCart.length > 1 ? 'ies' : 'y'}.
-              Each brochure is a 2-page A4 PDF with a cover page and a details page.
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn btn-ghost" onclick="document.getElementById('ai-brochure-config-modal').remove()">Cancel</button>
-            <button class="btn btn-primary" onclick="UI._runBrochureGeneration()">
-              📄 Generate Brochures
-            </button>
-          </div>
-        </div>
-      </div>`);
-  },
-
-  async _runBrochureGeneration() {
-    const selCols = [...document.querySelectorAll('input[name="brochure-col"]:checked')].map(cb => cb.value);
-    const company = document.getElementById('brochure-company')?.value?.trim()
-                    || 'RCIRL Property Consultant';
-
-    document.getElementById('ai-brochure-config-modal').remove();
-
-    this._showAILoading(
-      `Generating ${this.presentCart.length} brochure${this.presentCart.length > 1 ? 's' : ''}…`,
-      'Building a 2-page PDF for each property.'
-    );
-
-    const items = this.presentCart.map(c => ({
-      cat:          c.cat,
-      row_id:       c.rowId,
-      company_name: company,
-      columns:      selCols,
-    }));
+    const items    = this.presentCart.map(c => ({ cat: c.cat, row_id: c.rowId, company_name: company }));
 
     const result = await RCIRL_AI.generateBrochureBatch(items);
     this._hideAILoading();
@@ -1872,57 +1622,41 @@ Object.assign(UI, {
 
     if (!successes.length) { toast('All brochures failed — check the AI service log', 'error'); return; }
 
+    /* Show results modal */
     document.getElementById('ai-brochure-modal')?.remove();
     const cards = successes.map(r => {
       const url   = AI_API + r.url;
       const fname = r.url.split('/').pop();
       const name  = this.presentCart.find(c => c.rowId === r.row_id)?.name || r.row_id;
+      const canvaUrl = `https://www.canva.com/design/create?background_image_url=${encodeURIComponent(url)}`;
       return `
-        <div style="display:flex;justify-content:space-between;align-items:center;
-                    padding:12px 14px;background:var(--purple-xpale);
-                    border-radius:8px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--purple-xpale);border-radius:8px;margin-bottom:8px">
           <div style="font-size:13px;font-weight:600;color:var(--purple-dark)">📄 ${name}</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn btn-xs btn-secondary"
-                    onclick="UI.viewOutput('${url}','pdf','${fname}')">👁 View</button>
-            <button class="btn btn-xs btn-primary"
-                    onclick="UI.downloadFile('${url}','${fname}')">⬇️ Download</button>
-            <button class="btn btn-xs"
-                    onclick="UI.openInCanva('${url}','${fname}')"
-                    style="background:#7B2FBE;color:#fff;border:none;font-size:11px;
-                           padding:4px 10px;border-radius:6px;cursor:pointer;font-weight:600">
-              🎨 Open in Canva
-            </button>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">
+            <button class="btn btn-xs btn-secondary" onclick="UI.viewOutput('${url}','pdf','${fname}')">👁 View</button>
+            <a class="btn btn-xs btn-primary" href="${url}" download="${fname}">⬇️ Download</a>
+            <a class="btn btn-xs" style="background:#7B2FBE;color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;text-decoration:none" href="${canvaUrl}" target="_blank">✏️ Edit in Canva</a>
           </div>
         </div>`;
     }).join('');
 
     const failNote = fails.length
-      ? `<p style="font-size:12px;color:var(--danger);margin-top:10px">
-           ⚠️ ${fails.length} brochure(s) failed:
-           ${fails.map(f => f.error || 'unknown error').join('; ')}
-         </p>`
+      ? `<p style="font-size:12px;color:var(--danger);margin-top:10px">⚠️ ${fails.length} brochure(s) failed: ${fails.map(f=>f.error||'unknown error').join('; ')}</p>`
       : '';
 
     document.body.insertAdjacentHTML('beforeend', `
-      <div class="modal-overlay" id="ai-brochure-modal">
-        <div class="modal" style="max-width:580px;width:95vw">
+      <div class="modal-overlay" id="ai-brochure-modal" onclick="if(event.target.id==='ai-brochure-modal')document.getElementById('ai-brochure-modal').remove()">
+        <div class="modal" style="max-width:560px;width:95vw">
           <div class="modal-header">
             <div class="modal-title">📄 AI Brochures Ready</div>
-            <button class="modal-close"
-                    onclick="document.getElementById('ai-brochure-modal').remove()">×</button>
+            <button class="modal-close" onclick="document.getElementById('ai-brochure-modal').remove()">×</button>
           </div>
           <div class="modal-body">
             ${cards}
             ${failNote}
-            <p style="font-size:11px;color:var(--grey);margin-top:10px">
-              💡 <strong>Open in Canva</strong> — the brochure opens as an editable design.
-              Click any element to move or resize it, and use the Text tool to edit text.
-            </p>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-ghost"
-                    onclick="document.getElementById('ai-brochure-modal').remove()">Close</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('ai-brochure-modal').remove()">Close</button>
           </div>
         </div>
       </div>`);
@@ -1937,19 +1671,22 @@ Object.assign(UI, {
     document.getElementById('ai-loading-overlay')?.remove();
     document.getElementById('ai-error-modal')?.remove();
 
-    const isQuota = /quota|RESOURCE_EXHAUSTED|429|billing|insufficient/i.test(message);
+    const isQuota = /quota|RESOURCE_EXHAUSTED|429|free.tier|billing/i.test(message);
     const extraHelp = isQuota
       ? `<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:12px 14px;margin-top:12px;font-size:13px;color:#5d4037">
-           <strong>💳 OpenAI billing/quota issue:</strong><br>
-           Check your usage and billing at
-           <a href="https://platform.openai.com/account/billing" target="_blank" style="color:var(--purple)">platform.openai.com/account/billing</a>.
-           gpt-image-1 costs roughly $0.02–0.07 per poster depending on quality.
+           <strong>💳 Quota exceeded — how to fix:</strong><br>
+           Your Gemini free-tier is used up. You need to enable billing on the Google Cloud project linked to your API key.<br><br>
+           1. Go to <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--purple)">aistudio.google.com/apikey</a><br>
+           2. Click your project → <strong>Enable billing</strong><br>
+           3. Gemini 2.5 Flash Image costs ~$0.01–0.04 per poster — very cheap.<br>
+           4. Once billing is on, click <em>Generate Posters</em> again.
          </div>`
       : `<p style="font-size:12px;color:var(--grey);margin-top:12px">Common causes:<br>
          • <strong>Property not found</strong> — run run_local.py so migration runs first<br>
          • <strong>No photos uploaded</strong> — upload at least one photo for this property<br>
-         • <strong>OPENAI_API_KEY not set</strong> — add it to python-service/.env<br>
-         • <strong>OpenAI billing issue</strong> — check platform.openai.com/account/billing</p>`;
+         • <strong>OPENAI_API_KEY not set</strong> — add it to python-service/.env (this now handles both copy + poster images)<br>
+         • <strong>OpenAI billing issue</strong> — check https://platform.openai.com/account/billing<br>
+         • <strong>GEMINI_API_KEY</strong> — optional fallback; get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--purple)">aistudio.google.com/apikey</a></p>`;
 
     document.body.insertAdjacentHTML('beforeend', `
       <div class="modal-overlay" id="ai-error-modal" onclick="if(event.target.id==='ai-error-modal')document.getElementById('ai-error-modal').remove()">

@@ -8,6 +8,8 @@ import io
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+import random
+import time
 import requests
 
 from .. import db
@@ -117,51 +119,18 @@ def build_poster_prompt(row: dict, copy: dict, style_key: str = "ai",
             "Choose ONE bold, distinctive premium aesthetic and commit 100%."
         )
 
-    return f"""You are producing a PREMIUM REAL ESTATE MARKETING POSTER for print and digital use.
-Output format: {orientation}
+    return f"""Premium real estate poster. Format: {orientation}.
 
-=== PROPERTY PHOTO — ABSOLUTE RULE ===
-The uploaded photograph is the HERO of this poster.
-- Preserve it EXACTLY — do NOT alter, repaint, recolor, blur, or modify the building
-- It must occupy at least 50% of the poster area, placed prominently
-- Subtle dark vignette at photo EDGES ONLY is acceptable to aid text legibility
-- Do NOT place text, frames, or decorative overlays on top of the building
+PHOTO: Use uploaded photo EXACTLY as-is. No changes. Occupies top 50%+ of poster.
 
-=== VISUAL STYLE ===
 {style_block}
 
-=== ALL PROPERTY DETAILS — DISPLAY EVERY ITEM ON THE POSTER ===
-Property Name  : {headline}
-Location       : {subhead}
-Price          : {price}
-
+SHOW ALL ON POSTER:
+Property: {headline} | Location: {subhead} | Price: {price}
 {specs_section}
+CTA: {cta}
 
-Call to Action : {cta}
-
-=== DESIGN QUALITY REQUIREMENTS ===
-Content rules:
-- Show EVERY specification listed above (BHK, sq.ft, floor, type, furnished status etc)
-- Price must be VERY LARGE and immediately eye-catching — a dominant visual element
-- Use icons, small labels, or a clean grid to display spec items neatly
-- All spec text must be readable at a glance
-
-Typography:
-- HEADLINE = largest text element after the photo — bold and commanding
-- Maximum 2 font families: display/serif for headlines, clean sans-serif for specs
-- Strong contrast on ALL text — minimum 4.5:1 ratio against background
-- No illegible script fonts for spec text
-
-Layout and composition:
-- Clear hierarchy: Photo -> Headline -> Price -> All Specs -> CTA
-- CTA must be a distinct button, badge, or highlighted strip — not plain text
-- Premium design accents: thin rule lines, geometric shapes, gradient strips, or texture
-- Spacious, intentional layout — never cramped
-
-Quality bar:
-- Must look like a Sotheby's or JLL property card — not a basic flyer
-- Every buyer should think: this property is worth serious attention
-- NO watermarks, NO Lorem Ipsum, NO placeholder text, NO clip-art borders"""
+Design: luxury quality, clear hierarchy (photo→name→price→specs→CTA), price very prominent, all specs visible in clean grid or icons, CTA as distinct button, no watermarks."""
 
 
 
@@ -294,7 +263,7 @@ def _generate_openai(hero_photo: Path, prompt: str, out_path: Path, size: str = 
             "prompt": prompt,
             "n": "1",
             "size": size,           # passed from UI: 1024x1536 | 1024x1024 | 1536x1024
-            "quality": "medium",   # medium ~15-25s | low ~8-12s | high ~45-90s
+            "quality": "low",     # low=~$0.02/img | medium=~$0.04/img | high=~$0.08/img   # medium ~15-25s | low ~8-12s | high ~45-90s
         },
         timeout=120,
     )
@@ -402,7 +371,14 @@ def generate_poster(
 # ─────────────────────────────────────────────
 #  Parallel batch generation — generates all styles concurrently
 # ─────────────────────────────────────────────
-def generate_poster_batch_parallel(cat: str, row_id: str, copy: dict, styles: list) -> list:
+def generate_poster_batch_parallel(
+    cat: str, row_id: str, copy: dict,
+    styles=None,
+    style_hint: str = "",
+    size: str = "1024x1536",
+    columns: list | None = None,
+    hero_photo_urls: list | None = None,
+) -> list:
     """
     Generate multiple poster styles in parallel using threads.
     Returns list of {style, path, error} dicts.
@@ -418,24 +394,44 @@ def generate_poster_batch_parallel(cat: str, row_id: str, copy: dict, styles: li
     if not photos:
         raise ValueError(f"No photos uploaded for {row_id} — upload at least one photo first.")
 
-    hero_photo = Path(photos[0]["path"])
+    photo_map = {Path(p["path"]).name: Path(p["path"]) for p in photos}
+    selected  = [photo_map[url.split("/")[-1]]
+                 for url in (hero_photo_urls or [])
+                 if url.split("/")[-1] in photo_map]
+    hero_photo = selected[0] if selected else Path(photos[0]["path"])
+
+    if columns:
+        row = {k: v for k, v in row.items() if k in columns or k == "_id"}
+
     out_dir = settings.OUTPUTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    def _gen_one(style_key):
-        prompt = build_poster_prompt(row, copy, style_key)
-        out_path = out_dir / f"{row_id}_poster_{style_key}.png"
+    base_prompt = build_poster_prompt(row, copy, style_hint=style_hint, size=size)
+
+    # Normalise styles to dict {key: extra_hint}
+    if styles is None:
+        hints = {"v1": "", "v2": "", "v3": ""}
+    elif isinstance(styles, dict):
+        hints = styles
+    else:
+        hints = {k: "" for k in styles}
+
+    # Unique seed per generation run so repeated clicks give different outputs
+    seed = int(time.time())
+    var_seeds = {"v1": seed, "v2": seed + 1, "v3": seed + 2}
+
+    def _gen_one(var_key):
+        extra  = hints.get(var_key, "")
+        # Seed phrase ensures model generates differently each run
+        seed_s = f" [Unique design seed: {var_seeds.get(var_key, seed)}]"
+        prompt = base_prompt + ((" " + extra) if extra else "") + seed_s
+        out_path = out_dir / f"{row_id}_poster_{var_key}.png"
         try:
-            _generate_openai(hero_photo, prompt, out_path)
-            return {"style": style_key, "path": out_path, "error": None}
+            _generate_openai(hero_photo, prompt, out_path, size=size)
+            return {"style": var_key, "path": out_path, "error": None}
         except Exception as e:
-            return {"style": style_key, "path": None, "error": str(e)}
+            return {"style": var_key, "path": None, "error": str(e)}
 
-    results = []
-    max_workers = min(len(styles), 3)
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(_gen_one, s): s for s in styles}
-        for future in as_completed(futures):
-            results.append(future.result())
-
-    return results
+    with ThreadPoolExecutor(max_workers=min(len(hints), 3)) as executor:
+        futures = {executor.submit(_gen_one, k): k for k in hints}
+        return [f.result() for f in as_completed(futures)]
